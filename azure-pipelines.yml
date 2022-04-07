@@ -1,0 +1,91 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- master
+
+variables:
+  resource_group_tfstate: 'tfstate-eas-rg'
+  product: 'staticwebsite'
+  shortcode: 'sa'  
+
+stages:
+- stage: dev
+  variables:    
+    location: 'eastasia'        
+    environment_name: 'dev'
+    location_short_code: 'eas'
+    storageAccountName: backendstorage
+    resource_group_tfstate: dilipRG
+    backendAzureRmContainerName: tfstate
+    backendAzureRmKey: tfdev  
+
+  jobs:
+  - job: Infrastructure
+    displayName: 'Infrastructure'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - task: replacetokens@5
+      displayName: 'Replace tokens in **/*.tfvars'
+      inputs:
+        rootDirectory: '$(System.DefaultWorkingDirectory)/storage'
+        targetFiles: '**/*.tfvars'
+        escapeType: none
+        tokenPrefix: '__'
+        tokenSuffix: '__'
+        enableTelemetry: false
+
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform latest'
+      inputs:
+        terraformVersion: latest
+
+    - task: TerraformTaskV2@2
+      displayName: 'Terraform init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/storage'
+        commandOptions: '-backend-config=$(System.DefaultWorkingDirectory)/storage/inputs.tfvars'
+        backendServiceArm: '$(armConnection)'
+        backendAzureRmResourceGroupName: '$(resource_group_tfstate)'
+        backendAzureRmStorageAccountName: '$(storageAccountName)'
+        backendAzureRmContainerName: '$(backendAzureRmContainerName)'
+        backendAzureRmKey: '$(backendAzureRmKey)'
+
+    - task: TerraformTaskV2@2
+      displayName: 'Terraform plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/storage'
+        commandOptions: '-var-file="$(System.DefaultWorkingDirectory)/storage/inputs.tfvars" --out=planfile'
+        environmentServiceNameAzureRM: '$(armConnection)'
+
+    - task: TerraformTaskV2@2
+      displayName: 'Terraform apply'
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/storage'
+        commandOptions: '-auto-approve planfile'
+        environmentServiceNameAzureRM: '$(armConnection)'
+
+  - job: Deploy
+    displayName: 'Deploy'
+    pool:
+      vmImage: 'windows-latest'
+    dependsOn: 'Infrastructure'
+
+    steps:    
+    - task: AzureFileCopy@3
+      inputs:
+        SourcePath: '$(System.DefaultWorkingDirectory)/code'
+        azureSubscription: '$(armConnection)'
+        Destination: 'AzureBlob'
+        storage: '$(shortcode)$(product)$(environment_name)$(location_short_code)stor'
+        ContainerName: '$web'
