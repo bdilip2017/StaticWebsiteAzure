@@ -1,5 +1,5 @@
 # StaticWebsiteAzure
-Static Website Hosting on Azure Storage Account with Infrastructure Deployment using Terraform and Deployment using Azure Devops Release pipelines
+Static Website Hosting on Azure Storage Account with Infrastructure Deployment using Terraform and Deployment using Azure Devops YML multi stage Pipeline.
 
 Website URL : https://mystaticwebsitedilip.z7.web.core.windows.net/
 
